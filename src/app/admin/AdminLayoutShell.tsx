@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn, ADMIN_NAV } from '@/lib/utils';
 import {
@@ -57,14 +58,22 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
       )}>
         {/* Sidebar Header */}
         <div className={cn('flex items-center h-16 px-4 border-b border-white/10', collapsed ? 'justify-center' : 'justify-between')}>
-          {!collapsed && (
-            <Link href="/admin" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-md bg-ember flex items-center justify-center">
-                <span className="font-heading font-bold text-white text-[0.55rem]">SRN</span>
+          <Link href="/admin" className="flex items-center gap-2.5 overflow-hidden">
+            <div className="relative w-8 h-8 rounded-full bg-white p-0.5 shrink-0 shadow-sm border border-stone-200">
+              <Image
+                src="/logo.png"
+                alt="S.R.N. Mehta College Logo"
+                fill
+                className="object-contain rounded-full"
+              />
+            </div>
+            {!collapsed && (
+              <div className="flex flex-col min-w-0">
+                <span className="font-heading font-semibold text-white text-sm leading-tight truncate">S.R.N. Mehta</span>
+                <span className="text-[0.65rem] text-ember-glow font-medium uppercase tracking-wider leading-tight">Admin Portal</span>
               </div>
-              <span className="font-heading font-semibold text-white text-sm">Admin</span>
-            </Link>
-          )}
+            )}
+          </Link>
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"

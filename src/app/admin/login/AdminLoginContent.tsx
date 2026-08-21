@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button, Input } from '@/components/ui';
 import { Lock, AlertCircle } from 'lucide-react';
 import { loginAdminAction } from './actions';
@@ -40,11 +41,17 @@ export function AdminLoginContent() {
     <div className="min-h-screen bg-ink flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-ember flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-6 h-6 text-white" />
+          <div className="relative w-16 h-16 rounded-full bg-white p-1 shadow-lg border-2 border-ember mx-auto mb-4">
+            <Image
+              src="/logo.png"
+              alt="S.R.N. Mehta Degree College Logo"
+              fill
+              className="object-contain rounded-full"
+              priority
+            />
           </div>
-          <h1 className="font-heading font-semibold text-2xl text-white">Admin Login</h1>
-          <p className="text-sm text-white/40 mt-1">S.R.N. Mehta Degree College</p>
+          <h1 className="font-heading font-semibold text-2xl text-white">Admin Portal</h1>
+          <p className="text-sm text-ember-glow font-medium mt-1">S.R.N. Mehta Degree College</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 md:p-8 shadow-xl space-y-4">
