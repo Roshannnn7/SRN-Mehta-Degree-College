@@ -1,25 +1,27 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button, Card, Badge } from '@/components/ui';
 import {
   FolderOpen, Upload, Link as LinkIcon, CheckCircle2, Copy,
-  Film, Image as ImageIcon, AlertCircle, RefreshCw
+  Film, Image as ImageIcon, AlertCircle, RefreshCw, Trash2
 } from 'lucide-react';
 
 interface MediaAsset {
+  _id?: string;
   url: string;
   name: string;
   size?: string;
   type: 'image' | 'video';
   publicId?: string;
+  isPreset?: boolean;
 }
 
 const presetMedia: MediaAsset[] = [
-  { url: '/logo.png', name: 'College Official Logo', size: 'PNG', type: 'image' },
-  { url: '/campus-front.png', name: 'Campus Building Front', size: 'PNG', type: 'image' },
-  { url: '/campus-aerial.jpg', name: 'Campus Aerial View', size: 'JPG', type: 'image' },
-  { url: '/admissions-poster.png', name: 'BCA Admissions Banner', size: 'PNG', type: 'image' },
+  { url: '/logo.png', name: 'College Official Logo', size: 'PNG', type: 'image', isPreset: true },
+  { url: '/campus-front.png', name: 'Campus Building Front', size: 'PNG', type: 'image', isPreset: true },
+  { url: '/campus-aerial.jpg', name: 'Campus Aerial View', size: 'JPG', type: 'image', isPreset: true },
+  { url: '/admissions-poster.png', name: 'BCA Admissions Banner', size: 'PNG', type: 'image', isPreset: true },
 ];
 
 export default function AdminMediaPage() {
@@ -28,10 +30,27 @@ export default function AdminMediaPage() {
   const [mediaList, setMediaList] = useState<MediaAsset[]>(presetMedia);
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch saved media on mount
+  useEffect(() => {
+    async function loadMedia() {
+      try {
+        const res = await fetch('/api/admin/media');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          setMediaList([...json.data, ...presetMedia]);
+        }
+      } catch (err) {
+        console.error('Failed to load media assets:', err);
+      }
+    }
+    loadMedia();
+  }, []);
 
   const handleCopy = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -39,19 +58,35 @@ export default function AdminMediaPage() {
     setTimeout(() => setCopiedUrl(null), 2500);
   };
 
-  const handleAddUrl = (e: React.FormEvent) => {
+  const handleAddUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customUrl.trim()) return;
 
     const isVid = customUrl.match(/\.(mp4|webm|ogg|mov)$/i) || customUrl.includes('/video/upload/');
-    const newAsset: MediaAsset = {
-      url: customUrl.trim(),
-      name: `External Asset (${mediaList.length + 1})`,
-      size: isVid ? 'VIDEO' : 'URL',
-      type: isVid ? 'video' : 'image',
-    };
+    const name = `External Asset (${mediaList.length + 1})`;
+    const size = isVid ? 'VIDEO' : 'URL';
+    const type = isVid ? 'video' : 'image';
 
-    setMediaList((prev) => [newAsset, ...prev]);
+    try {
+      const res = await fetch('/api/admin/media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: customUrl.trim(), name, size, type }),
+      });
+      const json = await res.json();
+      const savedAsset: MediaAsset = json.success && json.data ? json.data : {
+        url: customUrl.trim(),
+        name,
+        size,
+        type,
+      };
+
+      setMediaList((prev) => [savedAsset, ...prev]);
+      setUploadSuccess('Asset URL added to library!');
+      setTimeout(() => setUploadSuccess(null), 3000);
+    } catch {
+      setMediaList((prev) => [{ url: customUrl.trim(), name, size, type }, ...prev]);
+    }
     setCustomUrl('');
   };
 
@@ -77,6 +112,7 @@ export default function AdminMediaPage() {
       if (json.success && json.data) {
         const isVid = json.data.resourceType === 'video' || file.type.startsWith('video/');
         const newAsset: MediaAsset = {
+          _id: json.data._id,
           url: json.data.url,
           name: json.data.originalName || file.name,
           size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
@@ -99,6 +135,33 @@ export default function AdminMediaPage() {
     }
   };
 
+  const handleDelete = async (item: MediaAsset, index: number) => {
+    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return;
+
+    const deleteKey = item._id || item.url;
+    setDeletingId(deleteKey);
+
+    try {
+      const params = new URLSearchParams();
+      if (item._id) params.set('id', item._id);
+      if (item.publicId) params.set('publicId', item.publicId);
+      params.set('type', item.type);
+
+      await fetch(`/api/admin/media?${params.toString()}`, {
+        method: 'DELETE',
+      });
+
+      setMediaList((prev) => prev.filter((_, i) => i !== index));
+      setUploadSuccess(`Deleted "${item.name}"`);
+      setTimeout(() => setUploadSuccess(null), 3000);
+    } catch (err) {
+      console.error('Failed to delete media:', err);
+      setUploadError('Failed to delete media item.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const filtered = mediaList.filter((item) => {
     if (filterType === 'all') return true;
     return item.type === filterType;
@@ -111,7 +174,7 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="font-heading font-semibold text-2xl text-ink flex items-center gap-2">
             <FolderOpen className="w-6 h-6 text-ember" />
-            Media & Asset Library (Cloudinary)
+            Media & Asset Library
           </h1>
           <p className="text-sm text-stone mt-1">
             Upload campus photos, lab banners, and tour videos to Cloudinary, or paste media URLs to use across all website modules.
@@ -159,7 +222,7 @@ export default function AdminMediaPage() {
           <div>
             <p className="font-semibold">{uploadError}</p>
             <p className="text-xs text-amber-700 mt-1">
-              Ensure your Cloudinary environment variables (<code className="px-1 bg-amber-100 rounded">CLOUDINARY_CLOUD_NAME</code>, <code className="px-1 bg-amber-100 rounded">CLOUDINARY_API_KEY</code>, <code className="px-1 bg-amber-100 rounded">CLOUDINARY_API_SECRET</code>) are configured in your <code className="px-1 bg-amber-100 rounded">.env.local</code>.
+              Ensure your Cloudinary environment variables (<code className="px-1 bg-amber-100 rounded">CLOUDINARY_CLOUD_NAME</code>, <code className="px-1 bg-amber-100 rounded">CLOUDINARY_API_KEY</code>, <code className="px-1 bg-amber-100 rounded">CLOUDINARY_API_SECRET</code>) are configured.
             </p>
           </div>
         </div>
@@ -219,65 +282,103 @@ export default function AdminMediaPage() {
 
       {/* Grid of Assets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filtered.map((item, idx) => (
-          <div
-            key={idx}
-            className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow group"
-          >
-            <div className="h-44 bg-stone-900 relative overflow-hidden flex items-center justify-center">
-              {item.type === 'video' ? (
-                <video
-                  src={item.url}
-                  controls
-                  className="max-h-full max-w-full object-contain"
-                />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={item.url}
-                  alt={item.name}
-                  className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
-                />
-              )}
-              <span className="absolute top-2 right-2 text-[0.65rem] font-mono px-2 py-0.5 rounded-full bg-black/70 text-white backdrop-blur flex items-center gap-1">
-                {item.type === 'video' ? <Film className="w-3 h-3 text-amber-400" /> : <ImageIcon className="w-3 h-3 text-emerald-400" />}
-                {item.size || (item.type === 'video' ? 'VIDEO' : 'IMG')}
-              </span>
-            </div>
+        {filtered.map((item, idx) => {
+          const deleteKey = item._id || item.url;
+          const isCurrentlyDeleting = deletingId === deleteKey;
 
-            <div className="p-3.5 flex flex-col justify-between flex-1">
-              <div>
-                <div className="flex items-center justify-between gap-1">
-                  <h4 className="font-heading font-semibold text-sm text-ink truncate">{item.name}</h4>
-                  <Badge variant={item.type === 'video' ? 'ember' : 'default'}>
-                    {item.type}
-                  </Badge>
+          return (
+            <div
+              key={idx}
+              className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow group relative"
+            >
+              <div className="h-44 bg-stone-900 relative overflow-hidden flex items-center justify-center">
+                {item.type === 'video' ? (
+                  <video
+                    src={item.url}
+                    controls
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                  />
+                )}
+                <span className="absolute top-2 right-2 text-[0.65rem] font-mono px-2 py-0.5 rounded-full bg-black/70 text-white backdrop-blur flex items-center gap-1">
+                  {item.type === 'video' ? <Film className="w-3 h-3 text-amber-400" /> : <ImageIcon className="w-3 h-3 text-emerald-400" />}
+                  {item.size || (item.type === 'video' ? 'VIDEO' : 'IMG')}
+                </span>
+
+                {/* Delete Button Header */}
+                {!item.isPreset && (
+                  <button
+                    type="button"
+                    title="Delete media"
+                    onClick={() => handleDelete(item, idx)}
+                    disabled={isCurrentlyDeleting}
+                    className="absolute top-2 left-2 p-1.5 rounded-lg bg-black/60 hover:bg-red-600 text-white transition-colors backdrop-blur disabled:opacity-50"
+                  >
+                    {isCurrentlyDeleting ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <div className="p-3.5 flex flex-col justify-between flex-1">
+                <div>
+                  <div className="flex items-center justify-between gap-1">
+                    <h4 className="font-heading font-semibold text-sm text-ink truncate">{item.name}</h4>
+                    <Badge variant={item.type === 'video' ? 'ember' : 'default'}>
+                      {item.type}
+                    </Badge>
+                  </div>
+                  <p className="text-[0.65rem] text-stone font-mono truncate mt-1 select-all">{item.url}</p>
                 </div>
-                <p className="text-[0.65rem] text-stone font-mono truncate mt-1 select-all">{item.url}</p>
-              </div>
 
-              <div className="mt-3 pt-2.5 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => handleCopy(item.url)}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-heading font-medium bg-stone-50 hover:bg-ember hover:text-white transition-colors text-stone border border-stone-200"
-                >
-                  {copiedUrl === item.url ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-600 font-semibold">Copied URL!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy {item.type === 'video' ? 'Video' : 'Image'} URL</span>
-                    </>
+                <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(item.url)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-heading font-medium bg-stone-50 hover:bg-ember hover:text-white transition-colors text-stone border border-stone-200"
+                  >
+                    {copiedUrl === item.url ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-emerald-600 font-semibold">Copied URL!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy {item.type === 'video' ? 'Video' : 'Image'} URL</span>
+                      </>
+                    )}
+                  </button>
+
+                  {!item.isPreset && (
+                    <button
+                      type="button"
+                      title="Delete asset"
+                      onClick={() => handleDelete(item, idx)}
+                      disabled={isCurrentlyDeleting}
+                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      {isCurrentlyDeleting ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

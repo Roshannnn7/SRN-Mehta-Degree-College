@@ -36,9 +36,28 @@ export async function POST(req: NextRequest) {
 
     const uploadResult = await uploadToCloudinary(buffer, folder, resourceType);
 
+    let dbRecordId: string | undefined;
+    try {
+      const { connectDB } = await import('@/lib/db/connection');
+      const { MediaAssetModel } = await import('@/lib/db/models');
+      await connectDB();
+      const saved = await MediaAssetModel.create({
+        url: uploadResult.url,
+        name: file.name,
+        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+        type: isVideo ? 'video' : 'image',
+        publicId: uploadResult.publicId,
+        format: uploadResult.format,
+      });
+      dbRecordId = saved._id.toString();
+    } catch (dbErr) {
+      console.error('Error saving media record to DB:', dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
+        _id: dbRecordId,
         url: uploadResult.url,
         publicId: uploadResult.publicId,
         format: uploadResult.format,

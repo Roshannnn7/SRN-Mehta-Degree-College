@@ -248,6 +248,17 @@ const PageSEOSchema = new Schema({
   canonicalUrl: String,
 }, { timestamps: true });
 
+// === MEDIA ASSET ===
+const MediaAssetSchema = new Schema({
+  url: { type: String, required: true },
+  name: { type: String, required: true },
+  size: String,
+  type: { type: String, enum: ['image', 'video'], default: 'image' },
+  publicId: String,
+  format: String,
+}, { timestamps: true });
+MediaAssetSchema.index({ createdAt: -1 });
+
 // === EXPORT MODELS ===
 export const AdminModel = mongoose.models.Admin || mongoose.model('Admin', AdminSchema);
 export const SiteSettingsModel = mongoose.models.SiteSettings || mongoose.model('SiteSettings', SiteSettingsSchema);
@@ -262,3 +273,5 @@ export const TestimonialModel = mongoose.models.Testimonial || mongoose.model('T
 export const FAQModel = mongoose.models.FAQ || mongoose.model('FAQ', FAQSchema);
 export const BCAContentModel = mongoose.models.BCAContent || mongoose.model('BCAContent', BCAContentSchema);
 export const PageSEOModel = mongoose.models.PageSEO || mongoose.model('PageSEO', PageSEOSchema);
+export const MediaAssetModel = mongoose.models.MediaAsset || mongoose.model('MediaAsset', MediaAssetSchema);
+
